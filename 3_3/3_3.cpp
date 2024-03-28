@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     
-    //Сощдание тредов
+    //Создание тредов
     std::vector<std::thread> threads;
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back(computeMandelbrot);
