@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <atomic>
 #include <sstream>
-#include <fcntl.h>
-#include <unistd.h>
 #include <iomanip>
 
 const int NUM_THREADS = 4;
@@ -18,25 +16,28 @@ std::atomic<int> byte_count[NUM_BINS] = {0};
 
 //Выполняется каждым потоком:
 void count_bytes(const std::string &filename, std::streampos start, std::streampos end) {
-    int fd = open(filename.c_str(), O_RDONLY); //открываем с флагом для чтения
-    if (fd == -1) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
         std::cerr << "Failed to open file for thread: " << filename << std::endl;
         return;
     }
 
-    if (lseek(fd, start, SEEK_SET) == -1) {
-        std::cerr << "Failed to seek in file for thread: " << filename << std::endl;
-        close(fd);
-        return;
+    file.seekg(start);
+    std::streamsize chunk_size = 1024;
+    std::vector<char> buffer(chunk_size);
+
+    while (file.tellg() < end) {
+        std::streamsize bytes_to_read = std::min(chunk_size, end - file.tellg());
+        file.read(buffer.data(), bytes_to_read);
+        std::streamsize bytes_read_chunk = file.gcount();
+
+        for (std::streamsize i = 0; i < bytes_read_chunk; ++i) {
+            ++byte_count[static_cast<unsigned char>(buffer[i])];
+            ++bytes_read;
+        }
     }
 
-    char byte;
-    while (lseek(fd, 0, SEEK_CUR) < end && read(fd, &byte, 1) == 1) {
-        ++byte_count[static_cast<unsigned char>(byte)];
-        ++bytes_read;
-    }
-
-    close(fd);
+    file.close();
 }
 
 int main(int argc, char *argv[]) {
