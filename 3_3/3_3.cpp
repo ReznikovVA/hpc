@@ -17,7 +17,6 @@ const double OFFSET_Y = 0.0;
 std::mutex mtx;
 std::condition_variable cv;
 bool ready = false;
-bool finished = false;
 std::queue<int> task_queue;
 std::vector<std::vector<double>> mandelbrotData(WIDTH, std::vector<double>(HEIGHT, 0.0));
 
@@ -38,13 +37,12 @@ void computeMandelbrot() {
         int task;
         {
             std::unique_lock<std::mutex> lock(mtx);
-            cv.wait(lock, [] { return ready || finished; });
-            if (finished && task_queue.empty()) return;
-            if (task_queue.empty()) continue;
+            cv.wait(lock, [] { return ready || task_queue.empty(); });
+            if (task_queue.empty()) return;
             task = task_queue.front();
             task_queue.pop();
         }
-        if (task == -1) break; //Выход из задачи
+        if (task == -1) break;
         int y = task / WIDTH;
         int x = task % WIDTH;
         double x0 = SCALE * (x - WIDTH / 2) + OFFSET_X;
@@ -62,7 +60,7 @@ void enqueueTasks(int num_threads) {
         }
     }
     for (int i = 0; i < num_threads; ++i) {
-        task_queue.push(-1); // сигнал завершения
+        task_queue.push(-1);
     }
     ready = true;
     cv.notify_all();
@@ -103,7 +101,7 @@ int main(int argc, char** argv) {
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     
-    //Создание потоков
+    //Сощдание тредов
     std::vector<std::thread> threads;
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back(computeMandelbrot);
@@ -111,13 +109,10 @@ int main(int argc, char** argv) {
 
     enqueueTasks(num_threads);
 
-    //Джоиним по завершению
+    //Завершение
     for (auto& thread : threads) {
         thread.join();
     }
-
-    // Сигнал завершения
-    finished = true;
 
     glutMainLoop();
     
