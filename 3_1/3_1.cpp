@@ -11,7 +11,6 @@
 const int NUM_THREADS = 4;
 const int NUM_BINS = 256;
 
-std::atomic<long> bytes_read(0);
 std::atomic<int> byte_count[NUM_BINS] = {0};
 
 //Выполняется каждым потоком:
@@ -33,7 +32,6 @@ void count_bytes(const std::string &filename, std::streampos start, std::streamp
 
         for (std::streamsize i = 0; i < bytes_read_chunk; ++i) {
             ++byte_count[static_cast<unsigned char>(buffer[i])];
-            ++bytes_read;
         }
     }
 
@@ -69,8 +67,6 @@ int main(int argc, char *argv[]) {
         thread.join();
     }
 
-    std::cout << "Total bytes read: " << bytes_read << std::endl;
-
     int max_bin_count = 0;
     for (int i = 0; i < NUM_BINS; ++i) {
         max_bin_count = std::max(max_bin_count, byte_count[i].load());
@@ -81,7 +77,9 @@ int main(int argc, char *argv[]) {
 
     std::cout << std::endl;
 
-    //Визуализация
+    //Визуализация and byteread
+    long bytes_read(0);
+    
     for (int i = 0; i < NUM_BINS; ++i) {
         if (byte_count[i] > 0) {
             //Нормированная длина столбцов гистограммы
@@ -94,7 +92,9 @@ int main(int argc, char *argv[]) {
             }
             std::cout << std::endl;
         }
+        bytes_read += byte_count[i];
     }
+    std::cout << std::dec << "Total bytes read: " << bytes_read << std::endl;
 
     return 0;
 }
