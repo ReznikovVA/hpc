@@ -43,10 +43,21 @@ int main(int argc, char *argv[]) {
         vec = generateRandomVector(VECTOR_SIZE);
     }
     
-    size_t local_size = VECTOR_SIZE / world_size;
+    size_t _size = VECTOR_SIZE / world_size;
+    size_t remainder = VECTOR_SIZE % world_size; //остаток
+    size_t local_size = (world_rank < remainder) ? (basic_size + 1) : basic_size;
+
     std::vector<int> local_vec(local_size);
     
-    MPI_Scatter(vec.data(), local_size, MPI_INT, local_vec.data(), local_size, MPI_INT, 0, MPI_COMM_WORLD);
+    std::vector<int> counts(world_size);
+    std::vector<int> displacements(world_size);
+
+    for (int i = 0; i < world_size; ++i) {
+        counts[i] = (i < remainder) ? (basic_size + 1) : basic_size;
+        displacements[i] = (i == 0) ? 0 : (displacements[i - 1] + counts[i - 1]);
+    }
+
+    MPI_Scatterv(vec.data(), counts.data(), displacements.data(), MPI_INT, local_vec.data(), local_size, MPI_INT, 0, MPI_COMM_WORLD);
     
     auto start = std::chrono::steady_clock::now();
     std::sort(local_vec.begin(), local_vec.end());
@@ -57,13 +68,13 @@ int main(int argc, char *argv[]) {
         sorted_vec.resize(VECTOR_SIZE);
     }
     
-    MPI_Gather(local_vec.data(), local_size, MPI_INT, sorted_vec.data(), local_size, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(local_vec.data(), local_size, MPI_INT, sorted_vec.data(), counts.data(), displacements.data(), MPI_INT, 0, MPI_COMM_WORLD);
     
     if (world_rank == 0) {
         auto start_merge = std::chrono::steady_clock::now();
         
         for (int i = 1; i < world_size; ++i) {
-            std::inplace_merge(sorted_vec.begin(), sorted_vec.begin() + i * local_size, sorted_vec.begin() + (i + 1) * local_size);
+            std::inplace_merge(sorted_vec.begin(), sorted_vec.begin() + displacements[i], sorted_vec.begin() + displacements[i] + counts[i]);
         }
         
         auto end_merge = std::chrono::steady_clock::now();
@@ -73,11 +84,10 @@ int main(int argc, char *argv[]) {
         
         check_sorted(sorted_vec);
     }
-    
-    auto duration_local_sort = end - start;
-    std::cout << "Процесс " << world_rank << " завершил за " << duration_local_sort.count() << " секунд" << std::endl;
-    
 
+    auto duration_local_sort = std::chrono::duration_cast<std::chrono::milliseconds>(end - start); //фикс таймера
+    std::cout << "Процесс " << world_rank << " завершил за " << duration_local_sort.count() / 1000.0 << " секунд" << std::endl;
+    
     MPI_Finalize();
     return 0;
 }
