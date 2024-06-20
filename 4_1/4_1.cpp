@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
         vec = generateRandomVector(VECTOR_SIZE);
     }
     
-    size_t _size = VECTOR_SIZE / world_size;
+    size_t basic_size = VECTOR_SIZE / world_size;
     size_t remainder = VECTOR_SIZE % world_size; //остаток
     size_t local_size = (world_rank < remainder) ? (basic_size + 1) : basic_size;
 
